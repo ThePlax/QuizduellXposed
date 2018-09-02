@@ -2,11 +2,9 @@ package de.qdxposed;
 
 import android.app.Application;
 import android.content.Context;
-import android.text.SpannableStringBuilder;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XC_MethodReplacement;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
@@ -48,85 +46,21 @@ public class Hook implements IXposedHookLoadPackage {
     }
 
     private void findClasses(XC_LoadPackage.LoadPackageParam lpparam) {
-        if (XposedHelpers.findClassIfExists(Classes.old_names.AlternativeButton, lpparam.classLoader) != null) {
-            log("findClasses: using old classes");
-            Classes.AlternativeButton = XposedHelpers.findClass(Classes.old_names.AlternativeButton, lpparam.classLoader);
-            Classes.AlternativeButtons = XposedHelpers.findClass(Classes.old_names.AlternativeButtons, lpparam.classLoader);
-            Classes.QuestionInterface = XposedHelpers.findClass(Classes.old_names.QuestionInterface, lpparam.classLoader);
-            Classes.AlternativeInterface = XposedHelpers.findClass(Classes.old_names.AlternativeInterface, lpparam.classLoader);
-            Classes.QkSettingsHelper = XposedHelpers.findClass(Classes.old_names.QkSettingsHelper, lpparam.classLoader);
-        } else {
-            log("findClasses: using new classes");
-            Classes.AlternativeButton = XposedHelpers.findClass(Classes.new_names.AlternativeButton, lpparam.classLoader);
-            Classes.AlternativeButtons = XposedHelpers.findClass(Classes.new_names.AlternativeButtons, lpparam.classLoader);
-            Classes.QuestionInterface = XposedHelpers.findClass(Classes.new_names.QuestionInterface, lpparam.classLoader);
-            Classes.AlternativeInterface = XposedHelpers.findClass(Classes.new_names.AlternativeInterface, lpparam.classLoader);
-            Classes.QkSettingsHelper = XposedHelpers.findClass(Classes.new_names.QkSettingsHelper, lpparam.classLoader);
-        }
+            log("findClasses");
+            Classes.BaseQuestion = XposedHelpers.findClass(Classes.new_names.BaseQuestion, lpparam.classLoader);
     }
 
     private void startHooking(XC_LoadPackage.LoadPackageParam lpparam) {
-        if (lpparam.packageName.contains("lite")) {
-            //removeAds(lpparam);
-        }
-
         appendAnswer(lpparam);
-        appendOpponentAnswer(lpparam);
     }
 
     private void appendAnswer(XC_LoadPackage.LoadPackageParam lpparam) {
-        findAndHookMethod(Classes.AlternativeButtons, "setAlternatives", Classes.QuestionInterface, new XC_MethodHook() {
+        findAndHookMethod(Classes.BaseQuestion, "getCorrect", new XC_MethodHook() {
             @Override
-            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                Object correctButton = callMethod(param.thisObject, "getCorrectButton");
-
-                Object alternativeTextView = getObjectField(correctButton, "alternativeTextView");
-                if (!(
-                        callMethod(alternativeTextView, "getText") instanceof SpannableStringBuilder
-                                ? (String) callMethod(callMethod(alternativeTextView, "getText"), "toString")
-                                : (String) callMethod(alternativeTextView, "getText")).contains("✓")) {
-                    callMethod(alternativeTextView, "append", " ✓");
-                    log("Solution appended");
-                }
-            }
-        });
-    }
-
-    private void appendOpponentAnswer(XC_LoadPackage.LoadPackageParam lpparam) {
-        findAndHookMethod(Classes.AlternativeButton, "changeAlternative", Classes.AlternativeInterface, boolean.class, new XC_MethodHook() {
-            @Override
-            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                boolean mIsOpponentAnswer = false;
-                try {
-                    mIsOpponentAnswer = XposedHelpers.getBooleanField(param.thisObject, "mIsOpponentAnswer");
-                    log("Opponent answer: " + callMethod(callMethod(getObjectField(param.thisObject, "alternativeTextView"), "getText"), "toString") + " Value: " + mIsOpponentAnswer);
-                } catch (Exception e) {
-                    log("Field mIsOpponentAnswer not found");
-                }
-                if (mIsOpponentAnswer) {
-                    Object alternativeTextView = getObjectField(param.thisObject, "alternativeTextView");
-                    if (!(
-                            callMethod(alternativeTextView, "getText") instanceof SpannableStringBuilder
-                                    ? (String) callMethod(callMethod(alternativeTextView, "getText"), "toString")
-                                    : (String) callMethod(alternativeTextView, "getText")).contains("⊕")) {
-                        callMethod(alternativeTextView, "append", " ⊕");
-                        log("Oppenent answer appended");
-                    }
-                }
-            }
-        });
-
-    }
-
-    private void removeAds(final XC_LoadPackage.LoadPackageParam lpparam) {
-        log("Found lite version, trying to remove ads!");
-
-        findAndHookMethod(Classes.QkSettingsHelper, "shouldShowAds", Context.class, "se.feomedia.quizkampen.models.User", new XC_MethodReplacement() {
-            @Override
-            protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
-                param.setResult(false);
-                log("Ads removed!");
-                return false;
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                String correct = (String)getObjectField(param.thisObject, "correct");
+                correct = (correct != null && correct.charAt(correct.length() - 1) != '✓') ? correct + " ✓" : correct;
+                callMethod(param.thisObject, "setCorrect", correct);
             }
         });
     }
